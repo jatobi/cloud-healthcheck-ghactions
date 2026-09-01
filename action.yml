@@ -1,0 +1,125 @@
+name: Cloud Health Check Continuous
+description: Scan infrastructure changes and publish actionable security findings in GitHub.
+author: Cloud Health Check
+
+branding:
+  icon: shield
+  color: green
+
+inputs:
+  license-key:
+    description: Continuous license stored as a GitHub Actions secret.
+    required: true
+  github-token:
+    description: GitHub token used for PR comments and SARIF upload.
+    required: false
+    default: ""
+  path:
+    description: Repository path to scan.
+    required: false
+    default: "."
+  fail-on:
+    description: Minimum severity that fails the check (critical, high, medium or never).
+    required: false
+    default: critical
+  language:
+    description: Report language (en, es or auto).
+    required: false
+    default: en
+  comment-on-pr:
+    description: Create or update the Cloud Health Check pull-request comment.
+    required: false
+    default: "true"
+  annotations:
+    description: Add file and line annotations to the workflow.
+    required: false
+    default: "true"
+  upload-sarif:
+    description: Upload results to GitHub code scanning.
+    required: false
+    default: "true"
+  report-directory:
+    description: Directory where HTML, JSON and SARIF reports are written.
+    required: false
+    default: cloud-health-check-report
+  api-url:
+    description: License validation endpoint.
+    required: false
+    default: https://cloudhealthcheck.io/api/licenses/validate
+  download-url:
+    description: Linux CLI download endpoint.
+    required: false
+    default: https://cloudhealthcheck.io/download/linux-x64
+
+outputs:
+  report-html:
+    description: Path to the generated HTML report.
+    value: ${{ steps.publish.outputs.report-html }}
+  report-json:
+    description: Path to the generated JSON report.
+    value: ${{ steps.publish.outputs.report-json }}
+  sarif:
+    description: Path to the generated SARIF report.
+    value: ${{ steps.publish.outputs.sarif }}
+  critical:
+    description: Number of critical findings.
+    value: ${{ steps.publish.outputs.critical }}
+  high:
+    description: Number of high findings.
+    value: ${{ steps.publish.outputs.high }}
+
+runs:
+  using: composite
+  steps:
+    - name: Validate Continuous entitlement
+      shell: bash
+      env:
+        CHC_LICENSE_KEY: ${{ inputs.license-key }}
+        CHC_API_URL: ${{ inputs.api-url }}
+      run: >-
+        python3 "${{ github.action_path }}/scripts/continuous.py" validate
+        --repository "${GITHUB_REPOSITORY}"
+        --run-id "${GITHUB_RUN_ID}"
+
+    - name: Download and verify Cloud Health Check
+      shell: bash
+      env:
+        CHC_DOWNLOAD_URL: ${{ inputs.download-url }}
+      run: |
+        set -euo pipefail
+        install_dir="${RUNNER_TEMP}/cloud-health-check-continuous"
+        mkdir -p "${install_dir}"
+        curl --fail --silent --show-error --location --retry 3 \
+          "${CHC_DOWNLOAD_URL}" --output "${install_dir}/cloud-health-check"
+        curl --fail --silent --show-error --location --retry 3 \
+          "${CHC_DOWNLOAD_URL}.sha256" --output "${install_dir}/cloud-health-check.sha256"
+        python3 "${{ github.action_path }}/scripts/continuous.py" verify \
+          "${install_dir}/cloud-health-check" "${install_dir}/cloud-health-check.sha256"
+        chmod +x "${install_dir}/cloud-health-check"
+        printf 'CHC_EXECUTABLE=%s\n' "${install_dir}/cloud-health-check" >> "${GITHUB_ENV}"
+
+    - name: Scan repository
+      shell: bash
+      env:
+        CHC_LICENSE_KEY: ${{ inputs.license-key }}
+        CHC_API_URL: ${{ inputs.api-url }}
+      run: |
+        set -euo pipefail
+        "${CHC_EXECUTABLE}" scan "${{ inputs.path }}" \
+          --output-dir "${{ inputs.report-directory }}" \
+          --lang "${{ inputs.language }}" \
+          --fail-on never
+
+    - name: Publish Continuous results
+      id: publish
+      shell: bash
+      env:
+        CHC_GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: >-
+        python3 "${{ github.action_path }}/scripts/continuous.py" publish
+        --report "${{ inputs.report-directory }}/report.json"
+        --report-directory "${{ inputs.report-directory }}"
+        --fail-on "${{ inputs.fail-on }}"
+        --comment-on-pr "${{ inputs.comment-on-pr }}"
+        --annotations "${{ inputs.annotations }}"
+        --upload-sarif "${{ inputs.upload-sarif }}"
