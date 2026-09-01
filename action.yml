@@ -103,6 +103,7 @@ runs:
       env:
         CHC_LICENSE_KEY: ${{ inputs.license-key }}
         CHC_API_URL: ${{ inputs.api-url }}
+        CHC_PLAN: Continuous
       run: |
         set -euo pipefail
         "${CHC_EXECUTABLE}" scan "${{ inputs.path }}" \

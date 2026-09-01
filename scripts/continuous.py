@@ -14,7 +14,8 @@ from pathlib import Path
 from typing import Any
 
 MARKER = "<!-- cloud-health-check-continuous -->"
-LEVELS = {"critical": "error", "high": "error", "medium": "warning", "low": "note", "info": "note"}
+ANNOTATION_LEVELS = {"critical": "error", "high": "warning", "medium": "warning", "low": "notice", "info": "notice"}
+SARIF_LEVELS = {"critical": "error", "high": "error", "medium": "warning", "low": "note", "info": "note"}
 FAIL_RANK = {"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0}
 
 
@@ -99,7 +100,7 @@ def sarif_document(report: dict[str, Any]) -> dict[str, Any]:
         }
         results.append({
             "ruleId": rule_id,
-            "level": LEVELS.get(str(finding.get("severity", "info")), "note"),
+            "level": SARIF_LEVELS.get(str(finding.get("severity", "info")), "note"),
             "message": {"text": f"{finding.get('title', rule_id)} — {finding.get('recommendation', '')}"},
             "locations": [location],
         })
@@ -119,6 +120,8 @@ def markdown_summary(report: dict[str, Any]) -> str:
     scores = report.get("scores", {})
     rows = [
         MARKER,
+        '<img src="https://cloudhealthcheck.io/brand/logo-animation-preview.gif" alt="Cloud Health Check" width="64" height="64">',
+        "",
         "## Cloud Health Check",
         "",
         f"**Overall score:** {scores.get('overall', 0)}/100 · "
@@ -150,7 +153,7 @@ def annotation_escape(value: Any, *, property_value: bool = False) -> str:
 
 def publish_annotations(report: dict[str, Any]) -> None:
     for finding in report.get("findings", [])[:50]:
-        command = LEVELS.get(str(finding.get("severity", "info")), "notice")
+        command = ANNOTATION_LEVELS.get(str(finding.get("severity", "info")), "notice")
         file = annotation_escape(finding.get("file", ""), property_value=True)
         line = max(1, int(finding.get("line") or 1))
         title = annotation_escape(f"{finding.get('rule_id', 'CHC')} · {finding.get('title', '')}", property_value=True)
