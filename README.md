@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: jatobi/cloud-health-check-ghactions@v4
+      - uses: jatobi/cloud-health-check-ghactions@v5
         with:
           license-key: ${{ secrets.CHC_LICENSE_KEY }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
