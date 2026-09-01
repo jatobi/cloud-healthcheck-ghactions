@@ -47,7 +47,7 @@ inputs:
     required: false
     default: https://cloudhealthcheck.io/api/licenses/validate
   download-url:
-    description: Linux CLI download endpoint.
+    description: Linux CLI ZIP download endpoint.
     required: false
     default: https://cloudhealthcheck.io/download/linux-x64
 
@@ -81,23 +81,36 @@ runs:
         --repository "${GITHUB_REPOSITORY}"
         --run-id "${GITHUB_RUN_ID}"
 
-    - name: Download and verify Cloud Health Check
+    - name: Download, verify and extract Cloud Health Check
       shell: bash
       env:
         CHC_DOWNLOAD_URL: ${{ inputs.download-url }}
       run: |
         set -euo pipefail
         install_dir="${RUNNER_TEMP}/cloud-health-check-continuous"
+        bundle="${install_dir}/cloud-health-check-linux-x64.zip"
+        checksum="${bundle}.sha256"
+        rm -rf "${install_dir}"
         mkdir -p "${install_dir}"
         curl --fail --silent --show-error --location --retry 3 \
-          "${CHC_DOWNLOAD_URL}" --output "${install_dir}/cloud-health-check"
+          "${CHC_DOWNLOAD_URL}" --output "${bundle}"
         curl --fail --silent --show-error --location --retry 3 \
-          "${CHC_DOWNLOAD_URL}.sha256" --output "${install_dir}/cloud-health-check.sha256"
+          "${CHC_DOWNLOAD_URL}.sha256" --output "${checksum}"
         python3 "${{ github.action_path }}/scripts/continuous.py" verify \
-          "${install_dir}/cloud-health-check" "${install_dir}/cloud-health-check.sha256"
-        chmod +x "${install_dir}/cloud-health-check"
-        printf 'CHC_EXECUTABLE=%s\n' "${install_dir}/cloud-health-check" >> "${GITHUB_ENV}"
-
+          "${bundle}" "${checksum}"
+        python3 -m zipfile -e "${bundle}" "${install_dir}"
+        executable="${install_dir}/cloud-health-check-linux-x64"
+        trivy="${install_dir}/tools/trivy"
+        kube_linter="${install_dir}/tools/kube-linter"
+        for required_file in "${executable}" "${trivy}" "${kube_linter}"; do
+          if [[ ! -f "${required_file}" ]]; then
+            echo "error: verified bundle is missing ${required_file}" >&2
+            exit 2
+          fi
+        done
+        chmod +x "${executable}" "${trivy}" "${kube_linter}"
+        "${executable}" doctor
+        printf 'CHC_EXECUTABLE=%s\n' "${executable}" >> "${GITHUB_ENV}"
     - name: Scan repository
       shell: bash
       env:

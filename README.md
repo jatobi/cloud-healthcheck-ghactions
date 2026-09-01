@@ -1,6 +1,6 @@
 # Cloud Health Check Continuous
 
-Cloud Health Check Continuous scans Terraform, Kubernetes, Docker and cloud configuration inside the GitHub runner. It adds file/line annotations, maintains one pull-request comment, uploads SARIF to GitHub code scanning and can block a merge by severity.
+Cloud Health Check Continuous scans Terraform, Kubernetes, Docker and cloud configuration inside the GitHub runner. The verified Linux bundle includes the native Cloud Health Check engine plus pinned Trivy and KubeLinter engines. It adds file/line annotations, maintains one pull-request comment, uploads SARIF to GitHub code scanning and can block a merge by severity.
 
 Repository contents remain in the runner. Only the license entitlement is validated against Cloud Health Check.
 
@@ -61,7 +61,8 @@ To retain the complete HTML/JSON/SARIF report as a workflow artifact:
 
 - Pin the Action to a full commit SHA in security-sensitive repositories.
 - Pull requests from forks do not receive repository secrets by default; keep that protection enabled.
-- The Action verifies the SHA-256 checksum supplied with the R2-hosted executable.
+- The Action downloads the complete Linux ZIP from R2 and verifies its SHA-256 checksum before extraction.
+- The Action verifies that Cloud Health Check, Trivy and KubeLinter are present and executable before scanning.
 - Do not print or pass the license through command-line arguments.
 
 ## License
